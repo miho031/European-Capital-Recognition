@@ -12,6 +12,7 @@ DUPLICATES_FOLDER = IMAGE_FOLDER / "duplicates"
 # 5–8 = vrlo slične fotografije
 HASH_THRESHOLD = 10
 # rezultati se nisu uvijek pokazali doslijedni, pa je prag postavljen na 10.
+# uvedene su dodatne provjere kako bi se smanjilo ponavljanje sličnih slika pa ovo služi kao posljednja linija obrane. Ako se pojave slične slike, one će biti premještene u mapu "duplicates".
 
 
 def find_similar_images(folder: Path) -> None:
