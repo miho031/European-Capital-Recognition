@@ -13,12 +13,15 @@ from dotenv import load_dotenv
 # POSTAVKE
 # ============================================================
 
-CITY_NAME = "Zagreb"
+CITY_NAME = "Rome"  # Ime grada, koristi se za imenovanje mapa i datoteka.
 
-# Središte Zagreba — za sada približno Trg bana Jelačića.
+# Središte Zagreba — za sada približno Trg bana Jelačića 45.8131 15.9775.
+# Središte Madrida — približno Puerta del Sol 40.4168 -3.7038.
+# Središte Beča — približno Stephansplatz 48.2082 16.3738.
+# Središte Rima — približno Piazza Venezia 41.8955 12.4823.
 # Kasnije ćemo za sve gradove koristiti isti izvor koordinata.
-CENTER_LAT = 45.8131
-CENTER_LON = 15.9775
+CENTER_LAT = 41.8955
+CENTER_LON = 12.4823
 
 # Sve gradove prikupljamo unutar jednakog radijusa.
 RADIUS_METERS = 1000
@@ -30,8 +33,8 @@ GRID_SPACING_METERS = 150
 CANDIDATES_PER_CELL = 10
 
 # Najviše slika iz iste Mapillary sekvence. (Sekvenca je niz fotografija snimljenih u nizu, npr. dok se vozite ulicom.)
-MAX_IMAGES_PER_SEQUENCE = 3
-# Povečano sa 1 na 3 zbog toga što večina čelija nije pronalazila odgovarajuču sliku, a svakako je svaka čelija ograničena na 1 sliku pa nebi trebalo dolaziti do preklapanja.
+MAX_IMAGES_PER_SEQUENCE = 5
+# Povečano sa 1 na 5 zbog toga što večina čelija nije pronalazila odgovarajuču sliku, a svakako je svaka čelija ograničena na 1 sliku pa nebi trebalo dolaziti do preklapanja.
 
 # Ukupan maksimalan broj spremljenih slika.
 MAX_IMAGES = 100
@@ -491,6 +494,7 @@ def main() -> None:
             "distance_from_center_m",
             "grid_latitude",
             "grid_longitude",
+            "camera_type",
             "captured_at",
         ]
 

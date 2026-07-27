@@ -1,0 +1,26 @@
+[
+    {
+        "city": "Zagreb",
+        "country": "Croatia",
+        "latitude": 45.8131,
+        "longitude": 15.9775
+    },
+    {
+        "city": "Madrid",
+        "country": "Spain",
+        "latitude": 40.4168,
+        "longitude": -3.7038
+    },
+    {
+        "city": "Rome",
+        "country": "Italy",
+        "latitude": 41.9028,
+        "longitude": 12.4964
+    },
+    {
+        "city": "Vienna",
+        "country": "Austria",
+        "latitude": 48.2082,
+        "longitude": 16.3738
+    }
+]
