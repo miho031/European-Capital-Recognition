@@ -2,7 +2,6 @@ import csv
 import math
 import os
 import time
-import json
 from pathlib import Path
 from typing import Any
 
@@ -10,12 +9,16 @@ import requests
 from dotenv import load_dotenv
 
 
-
 # ============================================================
 # POSTAVKE
 # ============================================================
 
+CITY_NAME = "Zagreb"
 
+# Središte Zagreba — za sada približno Trg bana Jelačića.
+# Kasnije ćemo za sve gradove koristiti isti izvor koordinata.
+CENTER_LAT = 45.8131
+CENTER_LON = 15.9775
 
 # Sve gradove prikupljamo unutar jednakog radijusa.
 RADIUS_METERS = 1000
@@ -27,8 +30,8 @@ GRID_SPACING_METERS = 150
 CANDIDATES_PER_CELL = 10
 
 # Najviše slika iz iste Mapillary sekvence. (Sekvenca je niz fotografija snimljenih u nizu, npr. dok se vozite ulicom.)
-MAX_IMAGES_PER_SEQUENCE = 5
-# Povečano sa 1 na 5 zbog toga što večina čelija nije pronalazila odgovarajuču sliku, a svakako je svaka čelija ograničena na 1 sliku pa nebi trebalo dolaziti do preklapanja.
+MAX_IMAGES_PER_SEQUENCE = 3
+# Povečano sa 1 na 3 zbog toga što večina čelija nije pronalazila odgovarajuču sliku, a svakako je svaka čelija ograničena na 1 sliku pa nebi trebalo dolaziti do preklapanja.
 
 # Ukupan maksimalan broj spremljenih slika.
 MAX_IMAGES = 100
@@ -43,10 +46,6 @@ MAPILLARY_IMAGES_URL = "https://graph.mapillary.com/images"
 # ============================================================
 # POMOĆNE FUNKCIJE
 # ============================================================
-def load_cities():
-    """Učitava popis gradova iz datoteke config/cities.json."""
-    with open("config/cities.json", "r", encoding="utf-8") as file:
-        return json.load(file)
 
 def meters_to_latitude_degrees(meters: float) -> float:
     """Približna pretvorba metara u stupnjeve geografske širine."""
@@ -340,28 +339,16 @@ def download_image(
 # ============================================================
 
 def main() -> None:
-    cities = load_cities()
-    for city in cities:
-
-        city_name = city["city"]
-        center_lat = city["latitude"]
-        center_lon = city["longitude"]
-
-        print("\n" + "=" * 60)
-        print(f"Prikupljanje grada: {city_name}")
-        print("=" * 60)
-
-
     load_dotenv()
 
     access_token = os.getenv("MAPILLARY_ACCESS_TOKEN")
 
-    if not access_token: 
+    if not access_token:
         raise RuntimeError(
             "MAPILLARY_ACCESS_TOKEN nije pronađen u .env datoteci."
         )
 
-    city_folder = OUTPUT_ROOT / city_name
+    city_folder = OUTPUT_ROOT / CITY_NAME
     images_folder = city_folder / "images"
 
     images_folder.mkdir(parents=True, exist_ok=True)
@@ -369,13 +356,13 @@ def main() -> None:
     metadata_path = city_folder / "metadata.csv"
 
     grid_points = generate_grid_points(
-        center_lat,
-        center_lon,
+        center_lat=CENTER_LAT,
+        center_lon=CENTER_LON,
         radius_meters=RADIUS_METERS,
         spacing_meters=GRID_SPACING_METERS,
     )
 
-    print(f"Grad: {city_name}")
+    print(f"Grad: {CITY_NAME}")
     print(f"Broj mrežnih točaka: {len(grid_points)}")
     print(f"Radijus: {RADIUS_METERS} m")
     print()
@@ -432,8 +419,8 @@ def main() -> None:
         image_latitude, image_longitude = coordinates
 
         center_distance = haversine_distance(
-            center_lat,
-            center_lon,
+            CENTER_LAT,
+            CENTER_LON,
             image_latitude,
             image_longitude,
         )
@@ -444,7 +431,7 @@ def main() -> None:
             time.sleep(REQUEST_DELAY_SECONDS)
             continue
 
-        filename = f"{city_name.lower()}_{len(used_image_ids) + 1:04d}.jpg"
+        filename = f"{CITY_NAME.lower()}_{len(used_image_ids) + 1:04d}.jpg"
         destination = images_folder / filename
 
         success = download_image(
@@ -466,7 +453,7 @@ def main() -> None:
         metadata_rows.append(
             {
                 "filename": filename,
-                "city": city_name,
+                "city": CITY_NAME,
                 "image_id": image_id,
                 "sequence_id": sequence_id or "",
                 "latitude": image_latitude,
@@ -504,7 +491,6 @@ def main() -> None:
             "distance_from_center_m",
             "grid_latitude",
             "grid_longitude",
-            "camera_type",
             "captured_at",
         ]
 
