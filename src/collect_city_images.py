@@ -10,11 +10,9 @@ import requests
 from dotenv import load_dotenv
 
 
-
 # ============================================================
 # POSTAVKE
 # ============================================================
-
 
 
 # Sve gradove prikupljamo unutar jednakog radijusa.
@@ -47,6 +45,7 @@ def load_cities():
     """Učitava popis gradova iz datoteke config/cities.json."""
     with open("config/cities.json", "r", encoding="utf-8") as file:
         return json.load(file)
+
 
 def meters_to_latitude_degrees(meters: float) -> float:
     """Približna pretvorba metara u stupnjeve geografske širine."""
@@ -351,12 +350,11 @@ def main() -> None:
         print(f"Prikupljanje grada: {city_name}")
         print("=" * 60)
 
-
     load_dotenv()
 
     access_token = os.getenv("MAPILLARY_ACCESS_TOKEN")
 
-    if not access_token: 
+    if not access_token:
         raise RuntimeError(
             "MAPILLARY_ACCESS_TOKEN nije pronađen u .env datoteci."
         )
@@ -521,6 +519,8 @@ def main() -> None:
     print(f"Spremljeno slika: {len(metadata_rows)}")
     print(f"Slike: {images_folder}")
     print(f"Metapodaci: {metadata_path}")
+
+    time.sleep(0.3)
 
 
 if __name__ == "__main__":
