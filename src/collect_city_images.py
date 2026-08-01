@@ -237,11 +237,23 @@ def fetch_candidates(
         "limit": CANDIDATES_PER_CELL,
     }
 
-    response = requests.get(
-        MAPILLARY_IMAGES_URL,
-        params=params,
-        timeout=30,
-    )
+    MAX_RETRIES = 3
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = requests.get(
+                MAPILLARY_IMAGES_URL,
+                params=params,
+                timeout=45
+            )
+            break
+
+        except requests.exceptions.ReadTimeout:
+
+            print(f"Timeout ({attempt+1}/{MAX_RETRIES})")
+
+            if attempt == MAX_RETRIES - 1:
+                return []
 
     if not response.ok:
         print(
