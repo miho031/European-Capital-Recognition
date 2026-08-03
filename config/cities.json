@@ -1,26 +1,77 @@
 [
-    {
-        "city": "Zagreb",
-        "country": "Croatia",
-        "latitude": 45.8131,
-        "longitude": 15.9775
-    },
-    {
-        "city": "Madrid",
-        "country": "Spain",
-        "latitude": 40.4168,
-        "longitude": -3.7038
-    },
-    {
-        "city": "Rome",
-        "country": "Italy",
-        "latitude": 41.9028,
-        "longitude": 12.4964
-    },
-    {
-        "city": "Vienna",
-        "country": "Austria",
-        "latitude": 48.2082,
-        "longitude": 16.3738
-    }
+  {
+    "city": "Zagreb",
+    "latitude": 45.8130,
+    "longitude": 15.9770
+  },
+  {
+    "city": "Vienna",
+    "latitude": 48.2082,
+    "longitude": 16.3738
+  },
+  {
+    "city": "Budapest",
+    "latitude": 47.4979,
+    "longitude": 19.0402
+  },
+  {
+    "city": "Prague",
+    "latitude": 50.0875,
+    "longitude": 14.4213
+  },
+  {
+    "city": "Bratislava",
+    "latitude": 48.1486,
+    "longitude": 17.1077
+  },
+  {
+    "city": "Ljubljana",
+    "latitude": 46.0569,
+    "longitude": 14.5058
+  },
+  {
+    "city": "Rome",
+    "latitude": 41.9028,
+    "longitude": 12.4964
+  },
+  {
+    "city": "Madrid",
+    "latitude": 40.4168,
+    "longitude": -3.7038
+  },
+  {
+    "city": "Paris",
+    "latitude": 48.8566,
+    "longitude": 2.3522
+  },
+  {
+    "city": "Berlin",
+    "latitude": 52.5200,
+    "longitude": 13.4050
+  },
+  {
+    "city": "Amsterdam",
+    "latitude": 52.3676,
+    "longitude": 4.9041
+  },
+  {
+    "city": "Brussels",
+    "latitude": 50.8503,
+    "longitude": 4.3517
+  },
+  {
+    "city": "Copenhagen",
+    "latitude": 55.6761,
+    "longitude": 12.5683
+  },
+  {
+    "city": "Stockholm",
+    "latitude": 59.3293,
+    "longitude": 18.0686
+  },
+  {
+    "city": "Helsinki",
+    "latitude": 60.1699,
+    "longitude": 24.9384
+  }
 ]

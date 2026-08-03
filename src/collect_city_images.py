@@ -240,19 +240,37 @@ def fetch_candidates(
     MAX_RETRIES = 3
 
     for attempt in range(MAX_RETRIES):
+
         try:
             response = requests.get(
                 MAPILLARY_IMAGES_URL,
                 params=params,
-                timeout=45
+                timeout=45,
             )
-            break
+            if response.ok:
+                return response.json().get("data", [])
 
-        except requests.exceptions.ReadTimeout:
+            print(
+                f"API greška {response.status_code}: "
+                f"{response.text[:300]}"
+            )
 
-            print(f"Timeout ({attempt+1}/{MAX_RETRIES})")
+            return []
 
-            if attempt == MAX_RETRIES - 1:
+        except (
+            requests.exceptions.ReadTimeout,
+            requests.exceptions.ConnectTimeout,
+            requests.exceptions.ConnectionError,
+        ) as e:
+
+            print(
+                f"Pokušaj ({attempt+1}/{MAX_RETRIES} nije uspio: {e}. Pokušavam ponovno..."
+            )
+
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(5)  # Pauza prije ponovnog pokušaja
+            else:
+                print("Dosegnut maksimalan broj pokušaja. Preskačem ovu ćeliju.")
                 return []
 
     if not response.ok:
@@ -351,8 +369,17 @@ def download_image(
 # ============================================================
 
 def main() -> None:
+    print(os.path.abspath(__file__))
+
+    load_dotenv()
+    access_token = os.getenv("MAPILLARY_ACCESS_TOKEN")
+
     cities = load_cities()
+
     for city in cities:
+
+        if city["city"] != "Berlin":
+            continue
 
         city_name = city["city"]
         center_lat = city["latitude"]
@@ -362,177 +389,187 @@ def main() -> None:
         print(f"Prikupljanje grada: {city_name}")
         print("=" * 60)
 
-    load_dotenv()
-
-    access_token = os.getenv("MAPILLARY_ACCESS_TOKEN")
-
-    if not access_token:
-        raise RuntimeError(
-            "MAPILLARY_ACCESS_TOKEN nije pronađen u .env datoteci."
-        )
-
-    city_folder = OUTPUT_ROOT / city_name
-    images_folder = city_folder / "images"
-
-    images_folder.mkdir(parents=True, exist_ok=True)
-
-    metadata_path = city_folder / "metadata.csv"
-
-    grid_points = generate_grid_points(
-        center_lat,
-        center_lon,
-        radius_meters=RADIUS_METERS,
-        spacing_meters=GRID_SPACING_METERS,
-    )
-
-    print(f"Grad: {city_name}")
-    print(f"Broj mrežnih točaka: {len(grid_points)}")
-    print(f"Radijus: {RADIUS_METERS} m")
-    print()
-
-    used_image_ids: set[str] = set()
-    sequence_counts: dict[str, int] = {}
-    metadata_rows: list[dict[str, Any]] = []
-
-    for grid_index, (grid_lat, grid_lon) in enumerate(
-        grid_points,
-        start=1,
-    ):
-        if len(used_image_ids) >= MAX_IMAGES:
-            break
-
-        bbox = create_cell_bbox(
-            latitude=grid_lat,
-            longitude=grid_lon,
-            cell_size_meters=GRID_SPACING_METERS,
-        )
-
-        print(
-            f"[{grid_index}/{len(grid_points)}] "
-            f"Provjeravam ćeliju..."
-        )
-
-        candidates = fetch_candidates(
-            access_token=access_token,
-            bbox=bbox,
-        )
-
-        selected = choose_best_candidate(
-            candidates=candidates,
-            grid_latitude=grid_lat,
-            grid_longitude=grid_lon,
-            used_image_ids=used_image_ids,
-            sequence_counts=sequence_counts,
-        )
-
-        if selected is None:
-            print("  Nema odgovarajuće slike.")
-            time.sleep(REQUEST_DELAY_SECONDS)
-            continue
-
-        image_id = str(selected["id"])
-        image_url = selected["thumb_1024_url"]
-        sequence_id = get_sequence_id(selected)
-        coordinates = extract_coordinates(selected)
-
-        if coordinates is None:
-            time.sleep(REQUEST_DELAY_SECONDS)
-            continue
-
-        image_latitude, image_longitude = coordinates
-
-        center_distance = haversine_distance(
-            center_lat,
-            center_lon,
-            image_latitude,
-            image_longitude,
-        )
-
-        # Dodatna zaštita: slika mora biti unutar zadanog kruga.
-        if center_distance > RADIUS_METERS:
-            print("  Slika je izvan zadanog radijusa.")
-            time.sleep(REQUEST_DELAY_SECONDS)
-            continue
-
-        filename = f"{city_name.lower()}_{len(used_image_ids) + 1:04d}.jpg"
-        destination = images_folder / filename
-
-        success = download_image(
-            image_url=image_url,
-            destination=destination,
-        )
-
-        if not success:
-            time.sleep(REQUEST_DELAY_SECONDS)
-            continue
-
-        used_image_ids.add(image_id)
-
-        if sequence_id:
-            sequence_counts[sequence_id] = (
-                sequence_counts.get(sequence_id, 0) + 1
+        if not access_token:
+            raise RuntimeError(
+                "MAPILLARY_ACCESS_TOKEN nije pronađen u .env datoteci."
             )
 
-        metadata_rows.append(
-            {
-                "filename": filename,
-                "city": city_name,
-                "image_id": image_id,
-                "sequence_id": sequence_id or "",
-                "latitude": image_latitude,
-                "longitude": image_longitude,
-                "distance_from_center_m": round(
-                    center_distance,
-                    2,
-                ),
-                "grid_latitude": grid_lat,
-                "grid_longitude": grid_lon,
-                "camera_type": selected.get("camera_type", ""),
-                "captured_at": selected.get(
-                    "captured_at",
-                    "",
-                ),
-            }
+        city_folder = OUTPUT_ROOT / city_name
+        images_folder = city_folder / "images"
+
+        images_folder.mkdir(parents=True, exist_ok=True)
+
+        metadata_path = city_folder / "metadata.csv"
+
+        grid_points = generate_grid_points(
+            center_lat,
+            center_lon,
+            radius_meters=RADIUS_METERS,
+            spacing_meters=GRID_SPACING_METERS,
         )
 
-        print(f"  Spremljeno: {filename}")
+        print(f"Grad: {city_name}")
+        print(f"Broj mrežnih točaka: {len(grid_points)}")
+        print(f"Radijus: {RADIUS_METERS} m")
+        print()
 
-        time.sleep(REQUEST_DELAY_SECONDS)
+        used_image_ids: set[str] = set()
+        sequence_counts: dict[str, int] = {}
+        metadata_rows: list[dict[str, Any]] = []
 
-    with metadata_path.open(
-        "w",
-        newline="",
-        encoding="utf-8",
-    ) as csv_file:
-        fieldnames = [
-            "filename",
-            "city",
-            "image_id",
-            "sequence_id",
-            "latitude",
-            "longitude",
-            "distance_from_center_m",
-            "grid_latitude",
-            "grid_longitude",
-            "camera_type",
-            "captured_at",
-        ]
+        saved_images = 0
+        no_candidates = 0
+        api_errors = 0
+        non_perspective = 0
+        duplicates = 0
 
-        writer = csv.DictWriter(
-            csv_file,
-            fieldnames=fieldnames,
-        )
+        for grid_index, (grid_lat, grid_lon) in enumerate(
+            grid_points,
+            start=1,
+        ):
+            if len(used_image_ids) >= MAX_IMAGES:
+                break
 
-        writer.writeheader()
-        writer.writerows(metadata_rows)
+            bbox = create_cell_bbox(
+                latitude=grid_lat,
+                longitude=grid_lon,
+                cell_size_meters=GRID_SPACING_METERS,
+            )
 
-    print()
-    print("Prikupljanje završeno.")
-    print(f"Spremljeno slika: {len(metadata_rows)}")
-    print(f"Slike: {images_folder}")
-    print(f"Metapodaci: {metadata_path}")
+            print(
+                f"[{grid_index}/{len(grid_points)}] "
+                f"Provjeravam ćeliju..."
+            )
 
-    time.sleep(0.3)
+            candidates = fetch_candidates(
+                access_token=access_token,
+                bbox=bbox,
+            )
+
+            selected = choose_best_candidate(
+                candidates=candidates,
+                grid_latitude=grid_lat,
+                grid_longitude=grid_lon,
+                used_image_ids=used_image_ids,
+                sequence_counts=sequence_counts,
+            )
+
+            if selected is None:
+                no_candidates += 1
+                print("  Nema odgovarajuće slike.")
+                time.sleep(REQUEST_DELAY_SECONDS)
+                continue
+
+            image_id = str(selected["id"])
+            image_url = selected["thumb_1024_url"]
+            sequence_id = get_sequence_id(selected)
+            coordinates = extract_coordinates(selected)
+
+            if coordinates is None:
+                no_candidates += 1
+                time.sleep(REQUEST_DELAY_SECONDS)
+                continue
+
+            image_latitude, image_longitude = coordinates
+
+            center_distance = haversine_distance(
+                center_lat,
+                center_lon,
+                image_latitude,
+                image_longitude,
+            )
+
+            # Dodatna zaštita: slika mora biti unutar zadanog kruga.
+            if center_distance > RADIUS_METERS:
+                print("  Slika je izvan zadanog radijusa.")
+                time.sleep(REQUEST_DELAY_SECONDS)
+                continue
+
+            filename = f"{city_name.lower()}_{len(used_image_ids) + 1:04d}.jpg"
+            destination = images_folder / filename
+
+            success = download_image(
+                image_url=image_url,
+                destination=destination,
+            )
+
+            if not success:
+                time.sleep(REQUEST_DELAY_SECONDS)
+                continue
+
+            used_image_ids.add(image_id)
+
+            if sequence_id:
+                sequence_counts[sequence_id] = (
+                    sequence_counts.get(sequence_id, 0) + 1
+                )
+
+            metadata_rows.append(
+                {
+                    "filename": filename,
+                    "city": city_name,
+                    "image_id": image_id,
+                    "sequence_id": sequence_id or "",
+                    "latitude": image_latitude,
+                    "longitude": image_longitude,
+                    "distance_from_center_m": round(
+                        center_distance,
+                        2,
+                    ),
+                    "grid_latitude": grid_lat,
+                    "grid_longitude": grid_lon,
+                    "camera_type": selected.get("camera_type", ""),
+                    "captured_at": selected.get(
+                        "captured_at",
+                        "",
+                    ),
+                }
+            )
+
+            print(f"  Spremljeno: {filename}")
+
+            time.sleep(REQUEST_DELAY_SECONDS)
+
+        with metadata_path.open(
+            "w",
+            newline="",
+            encoding="utf-8",
+        ) as csv_file:
+            fieldnames = [
+                "filename",
+                "city",
+                "image_id",
+                "sequence_id",
+                "latitude",
+                "longitude",
+                "distance_from_center_m",
+                "grid_latitude",
+                "grid_longitude",
+                "camera_type",
+                "captured_at",
+            ]
+
+            print("FIELDNAMES:")
+            print(fieldnames)
+
+            print("\nPRVI RED:")
+            print(metadata_rows[0].keys())
+
+            writer = csv.DictWriter(
+                csv_file,
+                fieldnames=fieldnames,
+            )
+
+            writer.writeheader()
+            writer.writerows(metadata_rows)
+
+        print()
+        print("Prikupljanje završeno.")
+        print(f"Spremljeno slika: {len(metadata_rows)}")
+        print(f"Slike: {images_folder}")
+        print(f"Metapodaci: {metadata_path}")
+
+        time.sleep(0.3)
 
 
 if __name__ == "__main__":
