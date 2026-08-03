@@ -21,11 +21,14 @@ RADIUS_METERS = 1000
 # Veličina jedne mrežne ćelije.
 GRID_SPACING_METERS = 150
 
+# Koliko daleko od mrežne točke smijemo tražiti fotografije.
+SEARCH_RADIUS_METERS = 25
+
 # Koliko kandidata Mapillary smije vratiti po ćeliji.
-CANDIDATES_PER_CELL = 10
+CANDIDATES_PER_CELL = 25
 
 # Najviše slika iz iste Mapillary sekvence. (Sekvenca je niz fotografija snimljenih u nizu, npr. dok se vozite ulicom.)
-MAX_IMAGES_PER_SEQUENCE = 5
+MAX_IMAGES_PER_SEQUENCE = 10
 # Povečano sa 1 na 5 zbog toga što večina čelija nije pronalazila odgovarajuču sliku, a svakako je svaka čelija ograničena na 1 sliku pa nebi trebalo dolaziti do preklapanja.
 
 # Ukupan maksimalan broj spremljenih slika.
@@ -159,7 +162,7 @@ def create_cell_bbox(
     west,south,east,north
     """
 
-    half_size = cell_size_meters / 2
+    half_size = SEARCH_RADIUS_METERS
 
     latitude_delta = meters_to_latitude_degrees(half_size)
     longitude_delta = meters_to_longitude_degrees(
@@ -278,7 +281,7 @@ def fetch_candidates(
             f"API greška {response.status_code}: "
             f"{response.text[:300]}"
         )
-        return []
+        return None
 
     return response.json().get("data", [])
 
@@ -299,8 +302,9 @@ def choose_best_candidate(
     for image in candidates:
         camera_type = image.get("camera_type")
         # Uklanjamo 360° panoramske i fisheye fotografije jer su često iskrivljene i neupotrebljive.
-        if camera_type != "perspective":
-            continue
+        
+        if camera_type != "perspective":           
+             continue
 
         image_id = str(image.get("id", ""))
 
@@ -446,6 +450,10 @@ def main() -> None:
                 bbox=bbox,
             )
 
+            if candidates is None:
+                api_errors += 1
+                continue
+
             selected = choose_best_candidate(
                 candidates=candidates,
                 grid_latitude=grid_lat,
@@ -568,6 +576,12 @@ def main() -> None:
         print(f"Spremljeno slika: {len(metadata_rows)}")
         print(f"Slike: {images_folder}")
         print(f"Metapodaci: {metadata_path}")
+
+        print("\n===== Statistika =====")
+        print(f"Spremljeno: {saved_images}")
+        print(f"Bez kandidata: {no_candidates}")
+        print(f"API greške: {api_errors}")
+        
 
         time.sleep(0.3)
 
