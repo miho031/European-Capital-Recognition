@@ -24,6 +24,11 @@ GRID_SPACING_METERS = 150
 # Koliko daleko od mrežne točke smijemo tražiti fotografije.
 SEARCH_RADIUS_METERS = 25
 
+# Kod API 500 greške smanjujemo radijus i pokušavamo ponovno za istu ćeliju.
+SEARCH_RADIUS_500_RETRIES = 4
+SEARCH_RADIUS_500_FACTOR = 0.5
+MIN_SEARCH_RADIUS_METERS = 1
+
 # Koliko kandidata Mapillary smije vratiti po ćeliji.
 CANDIDATES_PER_CELL = 25
 
@@ -37,7 +42,7 @@ MAX_IMAGES = 100
 # Pauza između API zahtjeva.
 REQUEST_DELAY_SECONDS = 0.25
 
-OUTPUT_ROOT = Path("dataset")
+OUTPUT_ROOT = Path("dataset/raw")
 MAPILLARY_IMAGES_URL = "https://graph.mapillary.com/images"
 
 
@@ -154,6 +159,7 @@ def create_cell_bbox(
     latitude: float,
     longitude: float,
     cell_size_meters: int,
+    search_radius_meters: int | None = None,
 ) -> str:
     """
     Stvara mali bbox oko mrežne točke.
@@ -162,7 +168,7 @@ def create_cell_bbox(
     west,south,east,north
     """
 
-    half_size = SEARCH_RADIUS_METERS
+    half_size = search_radius_meters or SEARCH_RADIUS_METERS
 
     latitude_delta = meters_to_latitude_degrees(half_size)
     longitude_delta = meters_to_longitude_degrees(
@@ -222,8 +228,9 @@ def get_sequence_id(image: dict[str, Any]) -> str | None:
 
 def fetch_candidates(
     access_token: str,
-    bbox: str,
-) -> list[dict[str, Any]]:
+    latitude: float,
+    longitude: float,
+) -> list[dict[str, Any]] | None:
     """Dohvaća moguće fotografije iz jedne male ćelije."""
 
     params = {
@@ -236,54 +243,89 @@ def fetch_candidates(
             "camera_type,"
             "thumb_1024_url"
         ),
-        "bbox": bbox,
         "limit": CANDIDATES_PER_CELL,
     }
 
     MAX_RETRIES = 3
 
-    for attempt in range(MAX_RETRIES):
+    search_radius = SEARCH_RADIUS_METERS
 
-        try:
-            response = requests.get(
-                MAPILLARY_IMAGES_URL,
-                params=params,
-                timeout=45,
-            )
-            if response.ok:
-                return response.json().get("data", [])
+    for radius_attempt in range(SEARCH_RADIUS_500_RETRIES):
+        bbox = create_cell_bbox(
+            latitude=latitude,
+            longitude=longitude,
+            cell_size_meters=GRID_SPACING_METERS,
+            search_radius_meters=search_radius,
+        )
 
-            print(
-                f"API greška {response.status_code}: "
-                f"{response.text[:300]}"
-            )
+        params["bbox"] = bbox
 
-            return []
+        for attempt in range(MAX_RETRIES):
 
-        except (
-            requests.exceptions.ReadTimeout,
-            requests.exceptions.ConnectTimeout,
-            requests.exceptions.ConnectionError,
-        ) as e:
+            try:
+                response = requests.get(
+                    MAPILLARY_IMAGES_URL,
+                    params=params,
+                    timeout=45,
+                )
+                if response.ok:
+                    return response.json().get("data", [])
 
-            print(
-                f"Pokušaj ({attempt+1}/{MAX_RETRIES} nije uspio: {e}. Pokušavam ponovno..."
-            )
+                if response.status_code == 500:
+                    print(
+                        f"API greška 500 za radijus {search_radius} m: "
+                        f"{response.text[:300]}"
+                    )
+                    break
 
-            if attempt < MAX_RETRIES - 1:
-                time.sleep(5)  # Pauza prije ponovnog pokušaja
-            else:
-                print("Dosegnut maksimalan broj pokušaja. Preskačem ovu ćeliju.")
+                print(
+                    f"API greška {response.status_code}: "
+                    f"{response.text[:300]}"
+                )
+
                 return []
 
-    if not response.ok:
+            except (
+                requests.exceptions.ReadTimeout,
+                requests.exceptions.ConnectTimeout,
+                requests.exceptions.ConnectionError,
+            ) as e:
+
+                print(
+                    f"Pokušaj ({attempt+1}/{MAX_RETRIES} nije uspio: {e}. Pokušavam ponovno..."
+                )
+
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(5)  # Pauza prije ponovnog pokušaja
+                else:
+                    print("Dosegnut maksimalan broj pokušaja. Preskačem ovu ćeliju.")
+                    return []
+
+        next_radius = max(
+            MIN_SEARCH_RADIUS_METERS,
+            int(search_radius * SEARCH_RADIUS_500_FACTOR),
+        )
+
+        if next_radius == search_radius:
+            break
+
+        search_radius = next_radius
+
+        if radius_attempt < SEARCH_RADIUS_500_RETRIES - 1:
+            print(
+                f"Smanjujem SEARCH_RADIUS_METERS na {search_radius} m "
+                "i pokušavam ponovno za istu ćeliju."
+            )
+            time.sleep(REQUEST_DELAY_SECONDS)
+
+    if response.status_code == 500:
         print(
-            f"API greška {response.status_code}: "
-            f"{response.text[:300]}"
+            "API greška 500 ostala je i nakon smanjivanja radijusa. "
+            "Preskačem ovu ćeliju."
         )
         return None
 
-    return response.json().get("data", [])
+    return []
 
 
 def choose_best_candidate(
@@ -302,9 +344,9 @@ def choose_best_candidate(
     for image in candidates:
         camera_type = image.get("camera_type")
         # Uklanjamo 360° panoramske i fisheye fotografije jer su često iskrivljene i neupotrebljive.
-        
-        if camera_type != "perspective":           
-             continue
+
+        if camera_type != "perspective":
+            continue
 
         image_id = str(image.get("id", ""))
 
@@ -382,9 +424,6 @@ def main() -> None:
 
     for city in cities:
 
-        if city["city"] != "Berlin":
-            continue
-
         city_name = city["city"]
         center_lat = city["latitude"]
         center_lon = city["longitude"]
@@ -434,12 +473,6 @@ def main() -> None:
             if len(used_image_ids) >= MAX_IMAGES:
                 break
 
-            bbox = create_cell_bbox(
-                latitude=grid_lat,
-                longitude=grid_lon,
-                cell_size_meters=GRID_SPACING_METERS,
-            )
-
             print(
                 f"[{grid_index}/{len(grid_points)}] "
                 f"Provjeravam ćeliju..."
@@ -447,7 +480,8 @@ def main() -> None:
 
             candidates = fetch_candidates(
                 access_token=access_token,
-                bbox=bbox,
+                latitude=grid_lat,
+                longitude=grid_lon,
             )
 
             if candidates is None:
@@ -581,7 +615,6 @@ def main() -> None:
         print(f"Spremljeno: {saved_images}")
         print(f"Bez kandidata: {no_candidates}")
         print(f"API greške: {api_errors}")
-        
 
         time.sleep(0.3)
 
