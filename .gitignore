@@ -1,2 +1,19 @@
-.env
+# Dataset
 dataset/
+data/
+
+# Trained models
+models/
+
+# Results
+results/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# IDE
+.vscode/
+.idea/
