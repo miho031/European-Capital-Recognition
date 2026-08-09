@@ -19,25 +19,25 @@ from dotenv import load_dotenv
 RADIUS_METERS = 1000
 
 # Veličina jedne mrežne ćelije.
-GRID_SPACING_METERS = 150
+GRID_SPACING_METERS = 75
 
 # Koliko daleko od mrežne točke smijemo tražiti fotografije.
-SEARCH_RADIUS_METERS = 25
+SEARCH_RADIUS_METERS = 35
 
 # Kod API 500 greške smanjujemo radijus i pokušavamo ponovno za istu ćeliju.
 SEARCH_RADIUS_500_RETRIES = 4
 SEARCH_RADIUS_500_FACTOR = 0.5
-MIN_SEARCH_RADIUS_METERS = 1
+MIN_SEARCH_RADIUS_METERS = 5
 
 # Koliko kandidata Mapillary smije vratiti po ćeliji.
-CANDIDATES_PER_CELL = 25
+CANDIDATES_PER_CELL = 20
 
 # Najviše slika iz iste Mapillary sekvence. (Sekvenca je niz fotografija snimljenih u nizu, npr. dok se vozite ulicom.)
-MAX_IMAGES_PER_SEQUENCE = 10
+MAX_IMAGES_PER_SEQUENCE = 15
 # Povečano sa 1 na 5 zbog toga što večina čelija nije pronalazila odgovarajuču sliku, a svakako je svaka čelija ograničena na 1 sliku pa nebi trebalo dolaziti do preklapanja.
 
 # Ukupan maksimalan broj spremljenih slika.
-MAX_IMAGES = 100
+MAX_IMAGES = 500
 
 # Pauza između API zahtjeva.
 REQUEST_DELAY_SECONDS = 0.25

@@ -9,7 +9,7 @@ from pathlib import Path
 # ============================================================
 
 
-DATASET_ROOT = Path("dataset/raw")
+DATASET_ROOT = Path("dataset/raw_4cities")
 OUTPUT_ROOT = Path("data")
 
 TRAIN_DIR_NAME = "train"

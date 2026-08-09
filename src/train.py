@@ -1,5 +1,6 @@
 from pathlib import Path
 from py_compile import main
+from xml.parsers.expat import model
 from tqdm import tqdm
 
 import torch
@@ -141,6 +142,10 @@ def main():
         weights=models.EfficientNet_B0_Weights.DEFAULT
     )
 
+    # Odmrzni sve slojeve EfficientNeta
+    for param in model.features.parameters():
+        param.requires_grad = True
+
     num_classes = len(train_dataset.classes)
 
     model.classifier[1] = nn.Linear(
@@ -148,13 +153,35 @@ def main():
         num_classes,
     )
 
+    # Otključaj zadnji blok EfficientNeta
+    # for param in model.features[-1].parameters():
+    #     param.requires_grad = True
+
     model.to(DEVICE)
 
     criterion = nn.CrossEntropyLoss()
 
     optimizer = torch.optim.Adam(
         model.parameters(),
-        lr=LEARNING_RATE,
+        lr=0.001,
+    )
+
+    trainable_params = sum(
+        p.numel()
+        for p in model.parameters()
+        if p.requires_grad
+    )
+
+    total_params = sum(
+        p.numel()
+        for p in model.parameters()
+    )
+
+    print(f"Ukupno parametara: {total_params:,}")
+    print(f"Parametara za treniranje: {trainable_params:,}")
+    print(
+        f"Postotak parametara koji se trenira: "
+        f"{100 * trainable_params / total_params:.2f}%"
     )
 
     best_accuracy = 0
@@ -202,7 +229,7 @@ def main():
 
         torch.save(
             model.state_dict(),
-            MODELS_DIR / "best_model.pth",
+            MODELS_DIR / "best_model_full_large.pth",
         )
 
         print("Model spremljen.")

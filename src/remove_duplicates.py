@@ -4,7 +4,7 @@ import imagehash
 from PIL import Image, UnidentifiedImageError
 
 
-IMAGE_FOLDER = Path("dataset/Zagreb")
+IMAGE_FOLDER = Path("dataset/raw/Zagreb")
 DUPLICATES_FOLDER = IMAGE_FOLDER / "duplicates"
 
 # Manji broj znači strože uspoređivanje.
