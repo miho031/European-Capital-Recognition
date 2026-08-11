@@ -17,3 +17,5 @@ __pycache__/
 # IDE
 .vscode/
 .idea/
+
+error_analysis/
