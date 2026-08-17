@@ -1,5 +1,7 @@
+import csv
 import random
 import shutil
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -8,8 +10,7 @@ from pathlib import Path
 # POSTAVKE
 # ============================================================
 
-
-DATASET_ROOT = Path("dataset/raw_4cities")
+DATASET_ROOT = Path("dataset/processed")
 OUTPUT_ROOT = Path("data")
 
 TRAIN_DIR_NAME = "train"
@@ -41,8 +42,6 @@ class ClassSplit:
 
     @property
     def total(self) -> int:
-        """Vraća ukupan broj slika u klasi."""
-
         return len(self.train) + len(self.val) + len(self.test)
 
 
@@ -52,8 +51,6 @@ class ClassSplit:
 
 
 def validate_ratios() -> None:
-    """Provjerava da zbroj omjera za train, val i test iznosi 1."""
-
     total_ratio = TRAIN_RATIO + VAL_RATIO + TEST_RATIO
 
     if abs(total_ratio - 1.0) > 0.0001:
@@ -63,10 +60,10 @@ def validate_ratios() -> None:
 
 
 def get_class_folders(dataset_root: Path) -> list[Path]:
-    """Vraća sortirane mape klasa iz raw dataset direktorija."""
-
     if not dataset_root.exists():
-        raise FileNotFoundError(f"Raw dataset mapa ne postoji: {dataset_root}")
+        raise FileNotFoundError(
+            f"Raw dataset mapa ne postoji: {dataset_root}"
+        )
 
     return sorted(
         folder
@@ -75,59 +72,184 @@ def get_class_folders(dataset_root: Path) -> list[Path]:
     )
 
 
-def get_class_images(class_folder: Path) -> list[Path]:
-    """Vraća sve podržane slike za jednu klasu."""
+def load_sequences(class_folder: Path) -> dict[str, list[Path]]:
+    """
+    Čita metadata.csv i grupira slike prema sequence_id.
+    """
 
+    metadata_path = class_folder / "metadata.csv"
     images_folder = class_folder / "images"
 
+    if not metadata_path.exists():
+        raise FileNotFoundError(
+            f"metadata.csv ne postoji za klasu: {class_folder.name}"
+        )
+
     if not images_folder.exists():
-        return []
+        raise FileNotFoundError(
+            f"images mapa ne postoji za klasu: {class_folder.name}"
+        )
 
-    return sorted(
-        image
-        for image in images_folder.iterdir()
-        if image.is_file() and image.suffix.lower() in IMAGE_EXTENSIONS
-    )
+    sequences: dict[str, list[Path]] = defaultdict(list)
+
+    with metadata_path.open(
+        "r",
+        encoding="utf-8",
+        newline="",
+    ) as csv_file:
+
+        reader = csv.DictReader(csv_file)
+
+        if "filename" not in reader.fieldnames:
+            raise ValueError(
+                f"metadata.csv za {class_folder.name} "
+                "nema stupac 'filename'."
+            )
+
+        if "sequence_id" not in reader.fieldnames:
+            raise ValueError(
+                f"metadata.csv za {class_folder.name} "
+                "nema stupac 'sequence_id'."
+            )
+
+        for row in reader:
+            filename = row["filename"].strip()
+            sequence_id = row["sequence_id"].strip()
+
+            if not filename:
+                continue
+
+            image_path = images_folder / filename
+
+            if not image_path.exists():
+                print(
+                    f"Upozorenje: slika ne postoji: {image_path}"
+                )
+                continue
+
+            if image_path.suffix.lower() not in IMAGE_EXTENSIONS:
+                continue
+
+            if not sequence_id:
+                # Ako neka slika ipak nema sequence_id,
+                # tretiramo je kao vlastitu sekvencu.
+                sequence_id = f"missing_{filename}"
+
+            sequences[sequence_id].append(image_path)
+
+    return dict(sequences)
 
 
-def split_images(
-    images: list[Path],
+def split_sequences(
+    sequences: dict[str, list[Path]],
     random_generator: random.Random,
 ) -> tuple[list[Path], list[Path], list[Path]]:
-    """Miješa slike i dijeli ih na train, val i test dio."""
+    """
+    Dijeli cijele Mapillary sekvence u train, val i test.
 
-    shuffled_images = images.copy()
-    random_generator.shuffle(shuffled_images)
+    Cilj je približiti se omjeru 70/15/15 prema broju slika,
+    bez dijeljenja iste sekvence između skupova.
+    """
 
-    train_count = int(len(shuffled_images) * TRAIN_RATIO)
-    val_count = int(len(shuffled_images) * VAL_RATIO)
+    sequence_items = list(sequences.items())
 
-    train_end = train_count
-    val_end = train_end + val_count
+    # Randomizacija služi kao tie-break za sekvence iste veličine.
+    random_generator.shuffle(sequence_items)
 
-    train_images = shuffled_images[:train_end]
-    val_images = shuffled_images[train_end:val_end]
-    test_images = shuffled_images[val_end:]
+    # Veće sekvence obrađujemo prve radi boljeg balansiranja.
+    sequence_items.sort(
+        key=lambda item: len(item[1]),
+        reverse=True,
+    )
+
+    total_images = sum(
+        len(images)
+        for _, images in sequence_items
+    )
+
+    targets = {
+        TRAIN_DIR_NAME: total_images * TRAIN_RATIO,
+        VAL_DIR_NAME: total_images * VAL_RATIO,
+        TEST_DIR_NAME: total_images * TEST_RATIO,
+    }
+
+    split_sequences_map = {
+        TRAIN_DIR_NAME: [],
+        VAL_DIR_NAME: [],
+        TEST_DIR_NAME: [],
+    }
+
+    split_counts = {
+        TRAIN_DIR_NAME: 0,
+        VAL_DIR_NAME: 0,
+        TEST_DIR_NAME: 0,
+    }
+
+    for sequence_id, images in sequence_items:
+
+        deficits = {
+            split_name: (
+                targets[split_name]
+                - split_counts[split_name]
+            )
+            for split_name in split_counts
+        }
+
+        best_split = max(
+            deficits,
+            key=deficits.get,
+        )
+
+        split_sequences_map[best_split].append(
+            (sequence_id, images)
+        )
+
+        split_counts[best_split] += len(images)
+
+    train_images = [
+        image
+        for _, images in split_sequences_map[TRAIN_DIR_NAME]
+        for image in images
+    ]
+
+    val_images = [
+        image
+        for _, images in split_sequences_map[VAL_DIR_NAME]
+        for image in images
+    ]
+
+    test_images = [
+        image
+        for _, images in split_sequences_map[TEST_DIR_NAME]
+        for image in images
+    ]
 
     return train_images, val_images, test_images
 
 
-def build_class_splits(dataset_root: Path) -> list[ClassSplit]:
-    """Gradi split za svaku klasu u raw datasetu."""
+def build_class_splits(
+    dataset_root: Path,
+) -> list[ClassSplit]:
 
     random_generator = random.Random(RANDOM_SEED)
     class_splits: list[ClassSplit] = []
 
     for class_folder in get_class_folders(dataset_root):
-        images = get_class_images(class_folder)
 
-        if not images:
-            print(f"Upozorenje: klasa '{class_folder.name}' nema slika.")
+        sequences = load_sequences(class_folder)
+
+        if not sequences:
+            print(
+                f"Upozorenje: klasa '{class_folder.name}' "
+                "nema dostupnih slika."
+            )
             continue
 
-        train_images, val_images, test_images = split_images(
-            images=images,
-            random_generator=random_generator,
+        train_images, val_images, test_images = (
+            split_sequences(
+                sequences=sequences,
+                random_generator=random_generator,
+            )
         )
 
         class_splits.append(
@@ -142,27 +264,41 @@ def build_class_splits(dataset_root: Path) -> list[ClassSplit]:
     return class_splits
 
 
-def prepare_output_folder(output_root: Path) -> None:
-    """Priprema izlaznu data mapu i briše stare split direktorije."""
+def prepare_output_folder(
+    output_root: Path,
+) -> None:
 
-    output_root.mkdir(parents=True, exist_ok=True)
+    output_root.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
-    for split_name in (TRAIN_DIR_NAME, VAL_DIR_NAME, TEST_DIR_NAME):
+    for split_name in (
+        TRAIN_DIR_NAME,
+        VAL_DIR_NAME,
+        TEST_DIR_NAME,
+    ):
+
         split_folder = output_root / split_name
 
         if split_folder.exists():
             shutil.rmtree(split_folder)
 
-        split_folder.mkdir(parents=True, exist_ok=True)
+        split_folder.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
 
 def copy_images(
     images: list[Path],
     destination_folder: Path,
 ) -> None:
-    """Kopira slike u zadanu odredišnu mapu."""
 
-    destination_folder.mkdir(parents=True, exist_ok=True)
+    destination_folder.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
     for image in images:
         shutil.copy2(
@@ -175,54 +311,159 @@ def write_split_to_disk(
     class_splits: list[ClassSplit],
     output_root: Path,
 ) -> None:
-    """Kopira sve splitane slike u data mapu."""
 
     for class_split in class_splits:
+
         copy_images(
-            images=class_split.train,
-            destination_folder=output_root / TRAIN_DIR_NAME / class_split.class_name,
+            class_split.train,
+            output_root
+            / TRAIN_DIR_NAME
+            / class_split.class_name,
         )
+
         copy_images(
-            images=class_split.val,
-            destination_folder=output_root / VAL_DIR_NAME / class_split.class_name,
+            class_split.val,
+            output_root
+            / VAL_DIR_NAME
+            / class_split.class_name,
         )
+
         copy_images(
-            images=class_split.test,
-            destination_folder=output_root / TEST_DIR_NAME / class_split.class_name,
+            class_split.test,
+            output_root
+            / TEST_DIR_NAME
+            / class_split.class_name,
         )
 
 
-def count_split_images(class_splits: list[ClassSplit]) -> tuple[int, int, int]:
-    """Vraća ukupan broj train, val i test slika."""
+def count_split_images(
+    class_splits: list[ClassSplit],
+) -> tuple[int, int, int]:
 
-    train_total = sum(len(class_split.train) for class_split in class_splits)
-    val_total = sum(len(class_split.val) for class_split in class_splits)
-    test_total = sum(len(class_split.test) for class_split in class_splits)
+    train_total = sum(
+        len(class_split.train)
+        for class_split in class_splits
+    )
+
+    val_total = sum(
+        len(class_split.val)
+        for class_split in class_splits
+    )
+
+    test_total = sum(
+        len(class_split.test)
+        for class_split in class_splits
+    )
 
     return train_total, val_total, test_total
 
 
-def print_statistics(class_splits: list[ClassSplit]) -> None:
-    """Ispisuje jasnu statistiku splitanja dataseta."""
+def verify_no_sequence_leakage(
+    class_splits: list[ClassSplit],
+) -> None:
+    """
+    Provjerava da ista sequence_id ne postoji u više skupova.
+    """
 
-    train_total, val_total, test_total = count_split_images(class_splits)
-    total_images = train_total + val_total + test_total
+    for class_split in class_splits:
 
-    print("\n===== Dataset split statistika =====")
+        class_folder = (
+            DATASET_ROOT
+            / class_split.class_name
+        )
+
+        sequences = load_sequences(class_folder)
+
+        image_to_sequence: dict[str, str] = {}
+
+        for sequence_id, images in sequences.items():
+            for image in images:
+                image_to_sequence[image.name] = sequence_id
+
+        seen_sequences: dict[str, str] = {}
+
+        split_groups = {
+            TRAIN_DIR_NAME: class_split.train,
+            VAL_DIR_NAME: class_split.val,
+            TEST_DIR_NAME: class_split.test,
+        }
+
+        for split_name, images in split_groups.items():
+
+            for image in images:
+
+                sequence_id = image_to_sequence.get(
+                    image.name
+                )
+
+                if sequence_id is None:
+                    continue
+
+                if sequence_id in seen_sequences:
+
+                    previous_split = (
+                        seen_sequences[sequence_id]
+                    )
+
+                    if previous_split != split_name:
+
+                        raise RuntimeError(
+                            "DATA LEAKAGE: "
+                            f"{class_split.class_name} | "
+                            f"sekvenca {sequence_id} "
+                            f"nalazi se u {previous_split} "
+                            f"i {split_name}."
+                        )
+
+                else:
+                    seen_sequences[sequence_id] = (
+                        split_name
+                    )
+
+
+def print_statistics(
+    class_splits: list[ClassSplit],
+) -> None:
+
+    train_total, val_total, test_total = (
+        count_split_images(class_splits)
+    )
+
+    total_images = (
+        train_total
+        + val_total
+        + test_total
+    )
+
+    print(
+        "\n===== Dataset split statistika ====="
+    )
+
     print(f"Raw mapa: {DATASET_ROOT}")
     print(f"Izlazna mapa: {OUTPUT_ROOT}")
     print(f"Seed: {RANDOM_SEED}")
+
     print(
         "Omjeri: "
         f"train={TRAIN_RATIO:.0%}, "
         f"val={VAL_RATIO:.0%}, "
         f"test={TEST_RATIO:.0%}"
     )
+
     print()
-    print(f"{'Klasa':<15} {'Train':>7} {'Val':>7} {'Test':>7} {'Ukupno':>8}")
+
+    print(
+        f"{'Klasa':<15} "
+        f"{'Train':>7} "
+        f"{'Val':>7} "
+        f"{'Test':>7} "
+        f"{'Ukupno':>8}"
+    )
+
     print("-" * 48)
 
     for class_split in class_splits:
+
         print(
             f"{class_split.class_name:<15} "
             f"{len(class_split.train):>7} "
@@ -232,6 +473,7 @@ def print_statistics(class_splits: list[ClassSplit]) -> None:
         )
 
     print("-" * 48)
+
     print(
         f"{'UKUPNO':<15} "
         f"{train_total:>7} "
@@ -239,7 +481,18 @@ def print_statistics(class_splits: list[ClassSplit]) -> None:
         f"{test_total:>7} "
         f"{total_images:>8}"
     )
-    print("\nSplitanje je završeno.")
+
+    print()
+
+    print(
+        "Provjera uspješna: "
+        "nijedna Mapillary sekvenca nije "
+        "podijeljena između skupova."
+    )
+
+    print(
+        "\nSplitanje je završeno."
+    )
 
 
 # ============================================================
@@ -248,20 +501,34 @@ def print_statistics(class_splits: list[ClassSplit]) -> None:
 
 
 def main() -> None:
-    """Pokreće izradu train, val i test dataseta."""
 
     validate_ratios()
-    class_splits = build_class_splits(DATASET_ROOT)
+
+    class_splits = build_class_splits(
+        DATASET_ROOT
+    )
 
     if not class_splits:
-        raise RuntimeError("Nije pronađena nijedna klasa sa slikama.")
+        raise RuntimeError(
+            "Nije pronađena nijedna klasa sa slikama."
+        )
 
-    prepare_output_folder(OUTPUT_ROOT)
+    verify_no_sequence_leakage(
+        class_splits
+    )
+
+    prepare_output_folder(
+        OUTPUT_ROOT
+    )
+
     write_split_to_disk(
         class_splits=class_splits,
         output_root=OUTPUT_ROOT,
     )
-    print_statistics(class_splits)
+
+    print_statistics(
+        class_splits
+    )
 
 
 if __name__ == "__main__":
