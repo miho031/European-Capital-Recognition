@@ -1,6 +1,4 @@
 from pathlib import Path
-from py_compile import main
-from xml.parsers.expat import model
 from tqdm import tqdm
 
 import torch
@@ -38,8 +36,39 @@ DEVICE = torch.device(
 
 weights = models.EfficientNet_B0_Weights.DEFAULT
 
-train_transform = weights.transforms()
+train_transform = transforms.Compose([
+    # Nasumično izreže dio slike i skalira ga na 224x224.
+    # scale=(0.80, 1.0) znači da neće raditi ekstremne cropove.
+    transforms.RandomResizedCrop(
+        IMAGE_SIZE,
+        scale=(0.80, 1.0),
+    ),
 
+    # Male promjene osvjetljenja i boje.
+    # Korisno jer Mapillary slike nastaju u različitim
+    # vremenskim i svjetlosnim uvjetima.
+    transforms.ColorJitter(
+        brightness=0.20,
+        contrast=0.20,
+        saturation=0.15,
+        hue=0.02,
+    ),
+
+    # Vrlo mala rotacija radi otpornosti na nagib kamere.
+    transforms.RandomRotation(
+        degrees=5,
+    ),
+
+    transforms.ToTensor(),
+
+    # ImageNet normalizacija koju očekuje pretrained EfficientNet.
+    transforms.Normalize(
+        mean=[0.485, 0.456, 0.406],
+        std=[0.229, 0.224, 0.225],
+    ),
+])
+
+# Validation skup se NE augmentira.
 val_transform = weights.transforms()
 
 train_losses = []
@@ -163,7 +192,7 @@ def main():
 
     optimizer = torch.optim.Adam(
         model.parameters(),
-        lr=0.001,
+        lr=LEARNING_RATE,
     )
 
     trainable_params = sum(
@@ -184,7 +213,8 @@ def main():
         f"{100 * trainable_params / total_params:.2f}%"
     )
 
-    best_accuracy = 0
+    best_accuracy = 0.0
+    best_epoch = 0
 
     for epoch in range(EPOCHS):
 
@@ -202,7 +232,7 @@ def main():
         )
 
         print(
-            f"Epoch {epoch+1}/{EPOCHS}"
+            f"Epoch {epoch + 1}/{EPOCHS}"
         )
         print(
             f"Train loss: {train_loss:.4f}"
@@ -217,22 +247,36 @@ def main():
             f"Validation accuracy: {val_acc:.2f}%"
         )
 
+        # Sprema model čim postigne najbolji validation rezultat.
+        if val_acc > best_accuracy:
+
+            best_accuracy = val_acc
+            best_epoch = epoch + 1
+
+            torch.save(
+                model.state_dict(),
+                MODELS_DIR / "best_model_full_augmented.pth",
+            )
+
+            print(
+                f"Novi najbolji model spremljen "
+                f"({best_accuracy:.2f}%)."
+            )
+
+    print(f"\nNajbolji epoch: {best_epoch}")
+    print(
+        f"Najbolja validation accuracy: "
+        f"{best_accuracy:.2f}%"
+    )
+
     print(f"Broj klasa: {len(train_dataset.classes)}")
     print(train_dataset.classes)
 
     print(f"Broj train slika: {len(train_dataset)}")
-    print(f"Broj validation slika: {len(val_dataset)}")
-
-    if val_acc > best_accuracy:
-
-        best_accuracy = val_acc
-
-        torch.save(
-            model.state_dict(),
-            MODELS_DIR / "best_model_full_large.pth",
-        )
-
-        print("Model spremljen.")
+    print(
+        f"Broj validation slika: "
+        f"{len(val_dataset)}"
+    )
 
 
 if __name__ == "__main__":
