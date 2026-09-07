@@ -33,12 +33,12 @@ MIN_SEARCH_RADIUS_METERS = 5
 CANDIDATES_PER_CELL = 20
 
 # Najviše slika iz iste Mapillary sekvence. (Sekvenca je niz fotografija snimljenih u nizu, npr. dok se vozite ulicom.)
-MAX_IMAGES_PER_SEQUENCE = 15
+MAX_IMAGES_PER_SEQUENCE = 5
 # Povečano sa 1 na 5 zbog toga što večina čelija nije pronalazila odgovarajuču sliku, a svakako je svaka čelija ograničena na 1 sliku pa nebi trebalo dolaziti do preklapanja.
 
 # Ukupan maksimalan broj spremljenih slika.
 MAX_IMAGES = 500
-
+TARGET_IMAGES = 350
 # Pauza između API zahtjeva.
 REQUEST_DELAY_SECONDS = 0.25
 
@@ -470,7 +470,7 @@ def main() -> None:
             grid_points,
             start=1,
         ):
-            if len(used_image_ids) >= MAX_IMAGES:
+            if len(used_image_ids) >= TARGET_IMAGES:
                 break
 
             print(
@@ -540,6 +540,7 @@ def main() -> None:
                 continue
 
             used_image_ids.add(image_id)
+            saved_images += 1
 
             if sequence_id:
                 sequence_counts[sequence_id] = (

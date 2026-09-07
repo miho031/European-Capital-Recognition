@@ -12,7 +12,7 @@ from PIL import Image, UnidentifiedImageError
 # POSTAVKE
 # ============================================================
 
-INPUT_ROOT = Path("dataset/raw")
+INPUT_ROOT = Path("dataset/raw_new")
 OUTPUT_ROOT = Path("dataset/processed")
 REVIEW_ROOT = Path("dataset/review")
 

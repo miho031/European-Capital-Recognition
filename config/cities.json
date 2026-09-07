@@ -1,78 +1,8 @@
 [
   {
-    "city": "Amsterdam",
-    "latitude": 52.349969,
-    "longitude": 4.916640
-  },
-  {
-    "city": "Athens",
-    "latitude": 37.983326,
-    "longitude": 23.733321
-  },
-  {
-    "city": "Berlin",
-    "latitude": 52.521819,
-    "longitude": 13.401549
-  },
-  {
-    "city": "Dublin",
-    "latitude": 53.333061,
-    "longitude": -6.248906
-  },
-  {
-    "city": "Lisbon",
-    "latitude": 38.722723,
-    "longitude": -9.144866
-  },
-  {
-    "city": "London",
-    "latitude": 51.499995,
-    "longitude": -0.116722
-  },
-  {
-    "city": "Madrid",
-    "latitude": 40.400026,
-    "longitude": -3.683352
-  },
-  {
-    "city": "Oslo",
-    "latitude": 59.916690,
-    "longitude": 10.749979
-  },
-  {
-    "city": "Paris",
-    "latitude": 48.86693,
-    "longitude": 2.333335
-  },
-  {
-    "city": "Prague",
-    "latitude": 50.083337,
-    "longitude": 14.465980
-  },
-  {
-    "city": "Rome",
-    "latitude": 41.895956,
-    "longitude": 12.483258
-  },
-  {
-    "city": "Stockholm",
-    "latitude": 59.350760,
-    "longitude": 18.097335
-  },
-  {
-    "city": "Tallinn",
-    "latitude": 59.433877,
-    "longitude": 24.728041
-  },
-  {
-    "city": "Valletta",
-    "latitude": 35.899732,
-    "longitude": 14.514711
-  },
-  {
-    "city": "Vienna",
-    "latitude": 48.200015,
-    "longitude": 16.366639
+    "city": "Sofia",
+    "latitude": 42.6833,
+    "longitude": 23.3167
   }
   
 ]

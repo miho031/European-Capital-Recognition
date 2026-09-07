@@ -2,7 +2,7 @@ import csv
 from pathlib import Path
 
 
-DATASET_ROOT = Path("dataset/processed")
+DATASET_ROOT = Path("dataset/raw_new")
 
 
 def sync_city(city_folder: Path):
