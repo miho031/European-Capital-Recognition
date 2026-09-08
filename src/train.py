@@ -26,7 +26,7 @@ BATCH_SIZE = 16
 
 NUM_WORKERS = 4
 
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0001
 
 EPOCHS = 15
 
@@ -255,7 +255,7 @@ def main():
 
             torch.save(
                 model.state_dict(),
-                MODELS_DIR / "best_model_full_augmented.pth",
+                MODELS_DIR / "best_model_lr_0001.pth",
             )
 
             print(

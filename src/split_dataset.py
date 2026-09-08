@@ -10,7 +10,7 @@ from pathlib import Path
 # POSTAVKE
 # ============================================================
 
-DATASET_ROOT = Path("dataset/processed")
+DATASET_ROOT = Path("dataset/raw_new")
 OUTPUT_ROOT = Path("data")
 
 TRAIN_DIR_NAME = "train"
