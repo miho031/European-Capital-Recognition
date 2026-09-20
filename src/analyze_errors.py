@@ -14,7 +14,7 @@ TEST_DIR = BASE_DIR / "data" / "test"
 MODEL_PATH = (
     BASE_DIR
     / "models"
-    / "best_model_full_large.pth"
+    / "best_model_scheduler_0001.pth"
 )
 
 OUTPUT_DIR = BASE_DIR / "error_analysis"

@@ -1,5 +1,4 @@
 from pathlib import Path
-from xml.parsers.expat import model
 from tqdm import tqdm
 
 import torch
@@ -178,9 +177,12 @@ def main():
 
     num_classes = len(train_dataset.classes)
 
-    model.classifier[1] = nn.Linear(
-        model.classifier[1].in_features,
-        num_classes,
+    in_features = model.classifier[1].in_features
+
+    # Povećani dropout radi smanjenja overfittinga.
+    model.classifier = nn.Sequential(
+        nn.Dropout(p=0.4),
+        nn.Linear(in_features, num_classes),
     )
 
     # Otključaj zadnji blok EfficientNeta
@@ -189,7 +191,7 @@ def main():
 
     model.to(DEVICE)
 
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+    criterion = nn.CrossEntropyLoss()
 
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -197,10 +199,11 @@ def main():
         weight_decay=0.0001
     )
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
-        T_max=15,
-        eta_min=1e-6
+        mode="max",
+        factor=0.5,
+        patience=2,
     )
 
     trainable_params = sum(
@@ -239,7 +242,7 @@ def main():
             criterion,
         )
 
-        scheduler.step()
+        scheduler.step(val_acc)
 
         print(
             f"Epoch {epoch + 1}/{EPOCHS}"
@@ -267,7 +270,7 @@ def main():
 
             torch.save(
                 model.state_dict(),
-                MODELS_DIR / "best_model_scheduler2_0001.pth",
+                MODELS_DIR / "best_model_dropout04_0001.pth",
             )
 
             print(

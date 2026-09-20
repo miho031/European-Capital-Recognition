@@ -18,7 +18,7 @@ from sklearn.metrics import (
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 TEST_DIR = BASE_DIR / "data" / "test"
-MODEL_PATH = BASE_DIR / "models" / "best_model_diverse_augmented.pth"
+MODEL_PATH = BASE_DIR / "models" / "best_model_scheduler_0001.pth"
 
 BATCH_SIZE = 16
 
